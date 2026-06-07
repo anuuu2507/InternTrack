@@ -3,6 +3,7 @@ import Auth from "./Auth";
 import Opportunities from "./opportunities";
 import Applications from "./Applications";
 import Dashboard from "./Dashboard";
+import Profile from "./Profile";
 
 function App() {
   const [role, setRole] = useState(localStorage.getItem("role"));
@@ -39,6 +40,7 @@ function App() {
           {navBtn("Opportunities", "opportunities")}
           {role === "student" && navBtn("My Applications", "applications")}
           {navBtn("Dashboard", "dashboard")}
+          {navBtn("Profile", "profile")}
           <span style={{ color: "white" }}>👤 {localStorage.getItem("name")} ({role})</span>
           <button onClick={handleLogout}
             style={{ padding: "8px 16px", backgroundColor: "white", color: "#4F46E5", border: "none", borderRadius: "8px", cursor: "pointer" }}>
@@ -50,6 +52,7 @@ function App() {
       {page === "opportunities" && <Opportunities />}
       {page === "applications" && <Applications />}
       {page === "dashboard" && <Dashboard />}
+      {page === "profile" && <Profile />}
     </div>
   );
 }

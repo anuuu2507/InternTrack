@@ -180,5 +180,38 @@ def get_all_applications():
     conn.close()
     return jsonify([dict(row) for row in apps]), 200
 
+@app.route('/api/profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    claims = get_jwt()
+    user_id = claims.get('id')
+    conn = get_db()
+    user = conn.execute('SELECT id, name, email, role FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    if user:
+        return jsonify(dict(user)), 200
+    return jsonify({'message': 'User not found'}), 404
+
+@app.route('/api/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    claims = get_jwt()
+    user_id = claims.get('id')
+    data = request.get_json()
+    conn = get_db()
+    try:
+        conn.execute('UPDATE users SET name = ?, email = ? WHERE id = ?',
+                     (data['name'], data['email'], user_id))
+        conn.commit()
+        user = conn.execute('SELECT id, name, email, role FROM users WHERE id = ?', (user_id,)).fetchone()
+        conn.close()
+        return jsonify(dict(user)), 200
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'message': 'Email already exists!'}), 400
+    except Exception as e:
+        conn.close()
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

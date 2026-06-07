@@ -141,24 +141,55 @@ def update_status(app_id):
 @app.route('/api/stats', methods=['GET'])
 @jwt_required()
 def get_stats():
+    claims = get_jwt()
+    user_id = claims.get('id')
+    role = claims.get('role')
+    
     conn = get_db()
+    
+    # Global stats
     total_opportunities = conn.execute('SELECT COUNT(*) FROM opportunities').fetchone()[0]
     total_applications = conn.execute('SELECT COUNT(*) FROM applications').fetchone()[0]
     total_offers = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'Offer'").fetchone()[0]
     total_rejected = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'Rejected'").fetchone()[0]
+    total_pending = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'Pending' OR status IS NULL").fetchone()[0]
+    
+    # Acceptance rate
+    acceptance_rate = round((total_offers / total_applications * 100) if total_applications > 0 else 0, 2)
+    
+    # Companies data
     companies = conn.execute('''
-        SELECT o.company, COUNT(a.id) as applicants
+        SELECT o.company, COUNT(a.id) as applicants, COUNT(CASE WHEN a.status = 'Offer' THEN 1 END) as offers
         FROM opportunities o
         LEFT JOIN applications a ON o.id = a.opportunity_id
         GROUP BY o.company
     ''').fetchall()
+    
+    # Student-specific stats (if user is a student)
+    student_stats = {}
+    if role == 'student':
+        student_apps = conn.execute('SELECT COUNT(*) FROM applications WHERE user_id = ?', (user_id,)).fetchone()[0]
+        student_offers = conn.execute("SELECT COUNT(*) FROM applications WHERE user_id = ? AND status = 'Offer'", (user_id,)).fetchone()[0]
+        student_rejected = conn.execute("SELECT COUNT(*) FROM applications WHERE user_id = ? AND status = 'Rejected'", (user_id,)).fetchone()[0]
+        student_pending = conn.execute("SELECT COUNT(*) FROM applications WHERE user_id = ? AND (status = 'Pending' OR status IS NULL)", (user_id,)).fetchone()[0]
+        student_stats = {
+            'applications': student_apps,
+            'offers': student_offers,
+            'rejected': student_rejected,
+            'pending': student_pending,
+            'acceptance_rate': round((student_offers / student_apps * 100) if student_apps > 0 else 0, 2)
+        }
+    
     conn.close()
     return jsonify({
         'total_opportunities': total_opportunities,
         'total_applications': total_applications,
         'total_offers': total_offers,
         'total_rejected': total_rejected,
-        'companies': [dict(row) for row in companies]
+        'total_pending': total_pending,
+        'acceptance_rate': acceptance_rate,
+        'companies': [dict(row) for row in companies],
+        'student_stats': student_stats if role == 'student' else None
     }), 200
 
 @app.route('/api/all-applications', methods=['GET'])

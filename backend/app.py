@@ -138,5 +138,28 @@ def update_status(app_id):
     conn.close()
     return jsonify({'message': 'Status updated!'}), 200
 
+@app.route('/api/stats', methods=['GET'])
+@jwt_required()
+def get_stats():
+    conn = get_db()
+    total_opportunities = conn.execute('SELECT COUNT(*) FROM opportunities').fetchone()[0]
+    total_applications = conn.execute('SELECT COUNT(*) FROM applications').fetchone()[0]
+    total_offers = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'Offer'").fetchone()[0]
+    total_rejected = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'Rejected'").fetchone()[0]
+    companies = conn.execute('''
+        SELECT o.company, COUNT(a.id) as applicants
+        FROM opportunities o
+        LEFT JOIN applications a ON o.id = a.opportunity_id
+        GROUP BY o.company
+    ''').fetchall()
+    conn.close()
+    return jsonify({
+        'total_opportunities': total_opportunities,
+        'total_applications': total_applications,
+        'total_offers': total_offers,
+        'total_rejected': total_rejected,
+        'companies': [dict(row) for row in companies]
+    }), 200
+
 if __name__ == '__main__':
     app.run(debug=True)

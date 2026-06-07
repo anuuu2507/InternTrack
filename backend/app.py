@@ -9,67 +9,48 @@ app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = 'interntrack-secret-key'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
 CORS(app, origins="*")
-
 jwt = JWTManager(app)
-
 init_db()
-
-@app.route('/', methods=['GET'])
-def health():
-    return jsonify({'message': 'Backend is running!'}), 200
 
 def get_db():
     conn = sqlite3.connect('interntrack.db')
     conn.row_factory = sqlite3.Row
     return conn
 
+@app.route('/')
+def health():
+    return jsonify({'message': 'Backend is running!'}), 200
+
 @app.route('/api/register', methods=['POST'])
 def register():
     try:
         data = request.get_json()
-        print(f"Register request data: {data}")
-        
-        if not data:
-            return jsonify({'message': 'No JSON data provided'}), 400
-        
         name = data.get('name')
         email = data.get('email')
         password = data.get('password')
         role = data.get('role', 'student')
-        
         if not name or not email or not password:
-            return jsonify({'message': 'Missing required fields: name, email, or password'}), 422
-        
+            return jsonify({'message': 'Missing required fields'}), 422
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-        
         conn = get_db()
         conn.execute('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
                      (name, email, password_hash, role))
         conn.commit()
         conn.close()
         return jsonify({'message': 'User registered successfully!'}), 201
-    except sqlite3.IntegrityError as e:
-        print(f"Integrity error: {e}")
+    except sqlite3.IntegrityError:
         return jsonify({'message': 'Email already exists!'}), 400
     except Exception as e:
-        print(f"Register error: {e}")
         return jsonify({'message': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
     try:
         data = request.get_json()
-        print(f"Login request data: {data}")
-        
-        if not data:
-            return jsonify({'message': 'No JSON data provided'}), 400
-        
         email = data.get('email')
         password = data.get('password')
-        
         if not email or not password:
-            return jsonify({'message': 'Email and password are required'}), 422
-        
+            return jsonify({'message': 'Email and password required'}), 422
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         conn = get_db()
         user = conn.execute('SELECT * FROM users WHERE email = ? AND password = ?',
@@ -83,7 +64,6 @@ def login():
             return jsonify({'token': token, 'role': user['role'], 'name': user['name']}), 200
         return jsonify({'message': 'Invalid credentials!'}), 401
     except Exception as e:
-        print(f"Login error: {e}")
         return jsonify({'message': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/me', methods=['GET'])
@@ -103,18 +83,60 @@ def get_opportunities():
 @jwt_required()
 def post_opportunity():
     claims = get_jwt()
-    user_id = claims.get('id')
     role = claims.get('role')
     if role not in ['faculty', 'admin']:
         return jsonify({'message': 'Unauthorized!'}), 403
     data = request.get_json()
-    if not data or not data.get('title') or not data.get('company') or not data.get('description'):
-        return jsonify({'message': 'Missing required opportunity fields'}), 422
     conn = get_db()
     conn.execute('INSERT INTO opportunities (title, company, stipend, deadline, description, posted_by) VALUES (?, ?, ?, ?, ?, ?)',
-                 (data['title'], data['company'], data.get('stipend', ''), data.get('deadline', ''), data['description'], user_id))
+                 (data['title'], data['company'], data.get('stipend', ''), data.get('deadline', ''), data['description'], claims.get('id')))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Opportunity posted!'}), 201
+
+@app.route('/api/apply', methods=['POST'])
+@jwt_required()
+def apply():
+    claims = get_jwt()
+    user_id = claims.get('id')
+    data = request.get_json()
+    conn = get_db()
+    existing = conn.execute('SELECT * FROM applications WHERE user_id = ? AND opportunity_id = ?',
+                            (user_id, data['opportunity_id'])).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({'message': 'Already applied!'}), 400
+    conn.execute('INSERT INTO applications (user_id, opportunity_id) VALUES (?, ?)',
+                 (user_id, data['opportunity_id']))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Applied successfully!'}), 201
+
+@app.route('/api/applications', methods=['GET'])
+@jwt_required()
+def get_applications():
+    claims = get_jwt()
+    user_id = claims.get('id')
+    conn = get_db()
+    apps = conn.execute('''
+        SELECT a.id, a.status, o.title, o.company, o.stipend, o.deadline
+        FROM applications a
+        JOIN opportunities o ON a.opportunity_id = o.id
+        WHERE a.user_id = ?
+    ''', (user_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in apps]), 200
+
+@app.route('/api/applications/<int:app_id>', methods=['PUT'])
+@jwt_required()
+def update_status(app_id):
+    data = request.get_json()
+    conn = get_db()
+    conn.execute('UPDATE applications SET status = ? WHERE id = ?',
+                 (data['status'], app_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Status updated!'}), 200
+
 if __name__ == '__main__':
     app.run(debug=True)

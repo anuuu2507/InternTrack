@@ -52,6 +52,23 @@ export default function Opportunities() {
             <p style={{ margin: "4px 0" }}><strong>Stipend:</strong> {opp.stipend}</p>
             <p style={{ margin: "4px 0" }}><strong>Deadline:</strong> {opp.deadline}</p>
             <p style={{ margin: "8px 0", color: "#666" }}>{opp.description}</p>
+            {role === "student" && (
+              <button onClick={async () => {
+                try {
+                  await axios.post("http://127.0.0.1:5000/api/apply",
+                    { opportunity_id: opp.id },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                  alert("Applied successfully!");
+                } catch (err) {
+                  alert(err.response?.data?.message || "Something went wrong!");
+                }
+              }}
+                style={{ marginTop: "12px", padding: "8px 16px", backgroundColor: "#4F46E5",
+                  color: "white", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+                Apply
+              </button>
+            )}
           </div>
         ))}
       </div>

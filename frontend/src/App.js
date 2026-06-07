@@ -1,23 +1,25 @@
-import logo from './logo.svg';
-import './App.css';
+import { useState } from "react";
+import Auth from "./Auth";
 
 function App() {
+  const [role, setRole] = useState(localStorage.getItem("role"));
+
+  const handleLogin = (userRole) => {
+    setRole(userRole);
+  };
+
+  if (!role) {
+    return <Auth onLogin={handleLogin} />;
+  }
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div style={{ padding: "2rem", fontFamily: "Arial" }}>
+      <h2>Welcome to InternTrack! 🎉</h2>
+      <p>Logged in as: <strong>{role}</strong></p>
+      <button onClick={() => { localStorage.clear(); setRole(null); }}
+        style={{ padding: "8px 16px", cursor: "pointer" }}>
+        Logout
+      </button>
     </div>
   );
 }

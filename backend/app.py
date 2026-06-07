@@ -161,5 +161,24 @@ def get_stats():
         'companies': [dict(row) for row in companies]
     }), 200
 
+@app.route('/api/all-applications', methods=['GET'])
+@jwt_required()
+def get_all_applications():
+    claims = get_jwt()
+    role = claims.get('role')
+    if role not in ['faculty', 'admin']:
+        return jsonify({'message': 'Unauthorized!'}), 403
+    conn = get_db()
+    apps = conn.execute('''
+        SELECT a.id, a.status, u.name as student_name, u.email,
+               o.title, o.company
+        FROM applications a
+        JOIN users u ON a.user_id = u.id
+        JOIN opportunities o ON a.opportunity_id = o.id
+        ORDER BY o.company
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in apps]), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
